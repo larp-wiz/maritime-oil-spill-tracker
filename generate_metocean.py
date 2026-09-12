@@ -1,29 +1,33 @@
-import xarray as xr
 import numpy as np
 import pandas as pd
+import xarray as xr
 
-# Define spatial grid around our test coordinates
-x = np.linspace(200000, 250000, 10)
-y = np.linspace(2700000, 2750000, 10)
-time = pd.date_range("2026-09-11", periods=24, freq="h")
+# 1. Spatial & Temporal Dimensions
+x = np.linspace(200000, 240000, 50)
+y = np.linspace(2700000, 2740000, 50)
+time = pd.date_range("2026-09-11 00:00", periods=48, freq="h")
 
-# Velocity vectors: u = east/west speed, v = north/south speed
-u_current = np.full((len(time), len(y), len(x)), 0.45)  # 0.45 m/s East current
-v_current = np.full((len(time), len(y), len(x)), 0.20)  # 0.20 m/s North current
-u_wind = np.full((len(time), len(y), len(x)), 5.2)      # 5.2 m/s East wind
-v_wind = np.full((len(time), len(y), len(x)), 2.1)      # 2.1 m/s North wind
+# 2. Build 3D Grids (time x y x)
+T, Y, X = np.meshgrid(np.arange(len(time)), y, x, indexing="ij")
 
-# Build INCOIS/ERA5 NetCDF Data Structure
+# 3. HIGH-VARIANCE VECTOR MATH (Strong Tidal Oscillations + Shifting Winds)
+# Strong sine/cosine swings force the trajectory to curve/S-shape noticeably
+u_current = 0.15 + 0.60 * np.sin(2 * np.pi * T / 12.0)  # Strong 12h tidal shift
+v_current = 0.10 + 0.55 * np.cos(2 * np.pi * T / 12.0)
+u_wind = 3.0 + 4.0 * np.sin(2 * np.pi * T / 24.0)       # Diurnal wind swing
+v_wind = 1.0 + 3.5 * np.cos(2 * np.pi * T / 24.0)
+
+# 4. Construct Dataset
 ds = xr.Dataset(
-    {
-        "u_current": (["time", "y", "x"], u_current),
-        "v_current": (["time", "y", "x"], v_current),
-        "u_wind": (["time", "y", "x"], u_wind),
-        "v_wind": (["time", "y", "x"], v_wind),
+    data_vars={
+        "u_current": (("time", "y", "x"), u_current),
+        "v_current": (("time", "y", "x"), v_current),
+        "u_wind": (("time", "y", "x"), u_wind),
+        "v_wind": (("time", "y", "x"), v_wind),
     },
-    coords={"x": x, "y": y, "time": time},
+    coords={"time": time, "y": y, "x": x},
+    attrs={"description": "High-Variance Oceanographic Grid"},
 )
 
-# Export directly to NetCDF format
-ds.to_netcdf("ocean_currents.nc")
-print("✅ Created ocean_currents.nc successfully!")
+ds.to_netcdf("ocean_currents.nc", mode="w")
+print("✅ Created high-variance ocean_currents.nc!")
